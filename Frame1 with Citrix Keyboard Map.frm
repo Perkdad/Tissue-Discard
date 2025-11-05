@@ -5,7 +5,7 @@ Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} Frame1
    ClientLeft      =   45
    ClientTop       =   390
    ClientWidth     =   15150
-   OleObjectBlob   =   "Frame1 with Citrix Keyboard Map.frx":0000
+   OleObjectBlob   =   "Frame1.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
 Attribute VB_Name = "Frame1"
@@ -13,851 +13,887 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+'**********************************
+'Program:   Discard Tissue Workbook
+'Form:      Frame1 Discard Tissue
+'Author:    Aaron Perkins
+'Date:      10/28/2025
+'Version:   1.4.2
+'**********************************
+
+'ToDo: Fix entry box scanning bin. Doesn't work and put "Start Bin" when bin is scanned
+
+'Declaration to map virtual keys to work within Citrix
 Private Declare PtrSafe Sub keybd_event Lib "user32" (ByVal bVk As Byte, ByVal bScan As Byte, ByVal dwFlags As Long, ByVal dwExtraInfo As Long)
 Private Declare PtrSafe Function MapVirtualKey Lib "user32" Alias "MapVirtualKeyA" (ByVal wCode As Long, ByVal wMapType As Long) As Long
 Private Const VK_RETURN = &HD
+Private Const VK_TAB = &H9
+Private Const VK_NUMLOCK = &H90
+Private Const VK_DOWN = &H28
+Private Const VK_SHIFT = &H10
 Private Const KEYEVENTF_KEYUP = &H2
 
+Private Sub EnterButton()
+'============
+'Enter Button
+'============
+
+    Dim mvkEnter As Double
+    
+    'Map the Enter key
+    mvkEnter = MapVirtualKey(VK_RETURN, 0)
+    
+    'Simulate Enter key press
+    keybd_event VK_RETURN, mvkEnter, 0, 0
+    'keybd_event VK_RETURN, 0, 0, 0 '***Redundant Key Press that causes error***
+    keybd_event VK_RETURN, mvkEnter, KEYEVENTF_KEYUP, 0
+    
+End Sub
+
+Private Sub TabButton()
+'==========
+'Tab Button
+'==========
+
+    Dim mvkTab As Double
+    
+    'Map the Tab key
+    mvkTab = MapVirtualKey(VK_TAB, 0)
+    
+    'Simulate Tab key press
+    keybd_event VK_TAB, mvkTab, 0, 0
+    'keybd_event VK_TAB, 0, 0, 0 '***Redundant Key Press***
+    keybd_event VK_TAB, mvkTab, KEYEVENTF_KEYUP, 0
+    
+End Sub
+
+Private Sub ShiftTabButton()
+'==================
+'Shift + Tab Button
+'==================
+
+    Dim mvkShift As Double
+    Dim mvkTab As Double
+    
+    'Map the Shift and Tab keys
+    mvkShift = MapVirtualKey(VK_SHIFT, 0)
+    mvkTab = MapVirtualKey(VK_TAB, 0)
+    
+    'Simulate Shift key press and hold
+    keybd_event VK_SHIFT, mvkShift, 0, 0
+    
+    'Simulate Tab key press
+    keybd_event VK_TAB, mvkTab, 0, 0
+    keybd_event VK_TAB, mvkTab, KEYEVENTF_KEYUP, 0
+    
+    'Release Shift key
+    keybd_event VK_SHIFT, mvkShift, KEYEVENTF_KEYUP, 0
+    
+End Sub
+
+Private Sub NumberLock()
+'==================
+'Number Lock Button
+'==================
+
+    Dim mvkNumLock As Double
+    
+    'Map the Num Lock key
+    mvkNumLock = MapVirtualKey(VK_NUMLOCK, 0)
+    
+    'Simulate Num Lock key press
+    keybd_event VK_NUMLOCK, mvkNumLock, 0, 0
+    'keybd_event VK_NUMLOCK, 0, 0, 0 '***Redundant Key Press***
+    keybd_event VK_NUMLOCK, mvkNumLock, KEYEVENTF_KEYUP, 0
+    
+End Sub
+
+Sub SendStringToCoPath(ByVal inputString As String)
+'=======================
+'Send string as keyboard
+'=======================
+
+    Dim wsh As Object
+    Dim i As Integer
+    Dim char As String
+    Dim vkCode As Long
+    Dim scanCode As Long
+    
+    ' Create WScript.Shell object for AppActivate
+    Set wsh = CreateObject("WScript.Shell")
+    
+    ' Process each character in the input string
+    For i = 1 To Len(inputString)
+        char = Mid(inputString, i, 1)
+        
+        ' Get virtual key code and scan code
+        vkCode = GetVirtualKeyCode(char)
+        If vkCode = 0 Then
+            'MsgBox "Unsupported character: " & char, vbExclamation '***Taken out to prevent interruption***
+            Exit Sub
+        End If
+        scanCode = MapVirtualKey(vkCode, 0)
+        
+        ' Handle shift for special characters if needed
+        If NeedsShift(char) Then
+            keybd_event VK_SHIFT, MapVirtualKey(VK_SHIFT, 0), 0, 0 ' Press Shift
+        End If
+        
+        ' Simulate key press and release
+        keybd_event vkCode, scanCode, 0, 0
+        keybd_event vkCode, scanCode, KEYEVENTF_KEYUP, 0
+        
+        ' Release Shift if used
+        If NeedsShift(char) Then
+            keybd_event VK_SHIFT, MapVirtualKey(VK_SHIFT, 0), KEYEVENTF_KEYUP, 0
+        End If
+    Next i
+    
+    Set wsh = Nothing
+    
+End Sub
+
+Private Function GetVirtualKeyCode(ByVal char As String) As Long
+'====================
+'Character Conversion
+'====================
+
+    ' Convert character to virtual key code
+    Select Case LCase(char)
+        Case "a" To "z"
+            GetVirtualKeyCode = Asc(UCase(char))
+        Case "0" To "9"
+            GetVirtualKeyCode = Asc(char)
+        Case "-"
+            GetVirtualKeyCode = &HBD ' VK_OEM_MINUS
+        Case ";"
+            GetVirtualKeyCode = &HBA ' VK_OEM_1
+        Case Else
+            ' Add more special characters as needed
+            GetVirtualKeyCode = 0 ' Unsupported character
+    End Select
+    
+End Function
+
+Private Function NeedsShift(ByVal char As String) As Boolean
+'==================
+'Special Characters
+'==================
+
+    ' Determine if Shift is needed for the character
+    Select Case char
+        Case "~", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "{", "}", "|", ":", """", "<", ">", "?"
+            NeedsShift = True
+        Case Else
+            NeedsShift = False
+    End Select
+    
+End Function
+
 Private Sub Workbook_Open()
-Frame1.Show
+'=============
+'Open Workbook
+'=============
+
+    'Frame1.Show
+    Call UserForm_Initialize
+    
 End Sub
 
 Private Sub CommandButton1_Click()
-'*****
+'=====
 'Reset
-'*****
-
-Me.EnterBox1.Value = ""
-Me.ListBox3.Clear
-Me.ListBox4.Clear
-Call Update
-Call UserForm_Initialize
-
-End Sub
-
-Private Sub CommandButton10_Click()
+'=====
     
-    Call Update
-    Frame1.EnterBox1.SetFocus
+    'Save workbook
+    ThisWorkbook.Save
     
+    'Clear Entry and list boxes
+    Me.EnterBox1.Value = ""
+    Me.ListBox3.Clear
+    Me.ListBox4.Clear
+    
+    'Reset and clear Small & Large buttons
+    Me.Small.Value = False
+    Me.Large.Value = False
+    
+    'Set behaviors
+    Cancel = True
+    EnterBox1.EnterKeyBehavior = False
+    EnterBox1.TabKeyBehavior = False
+    
+    Call UserForm_Initialize
+
 End Sub
 
 Private Sub CommandButton11_Click()
+'==========
+'Create Bin
+'==========
+
     UserForm1.Show
+    
 End Sub
 
 Private Sub CommandButton12_Click()
-'***********************
+'=======================
 'Backdoor to spreadsheet
-'***********************
+'=======================
 
-Unload Me
-
-Application.WindowState = xlNormal
+    Unload Me
+    Application.WindowState = xlNormal
 
 End Sub
 
 Private Sub CommandButton13_Click()
-'**********
+'==========
 'Print List
-'**********
-
-Call Update
-
-
-If Me.ListBox2.List(0, 0) = "NS" Then
-    MsgBox "No Bin is selected for printing"
-    GoTo Bend
-End If
-
-
-
-'***Clear Sheet***
-Worksheets("List").Cells.ClearContents
-
-'*********
-'New Start
-'*********
-
-Dim List As Worksheet
-Set List = Worksheets("List")
-Dim rVal As Integer
-Dim SmVal As Integer
-Dim LgVal As Integer
-
-List.Cells(1, 5).Value = "Bin: " & Me.ListBox2.List(0, 0)
-List.Cells(3, 1).Value = "Small"
-List.Cells(3, 2).Value = "Part"
-List.Cells(3, 3).Value = "Date"
-List.Cells(3, 9).Value = "Large"
-List.Cells(3, 10).Value = "Part"
-List.Cells(3, 11).Value = "Date"
-
-rVal = 1
-SmVal = 4
-LgVal = 4
-
-'***Bypass error caused by Do While loop***
-On Error GoTo err
-
-Do While Me.ListBox1.List(rVal, 0) <> "" 'Throws error when list is exceeded
+'==========
     
-    If Me.ListBox1.List(rVal, 2) = "Small" Then
-        If SmVal < 48 Then 'First Row
-            List.Cells(SmVal, 1).Value = Me.ListBox1.List(rVal, 0)
-            List.Cells(SmVal, 2).Value = Me.ListBox1.List(rVal, 1)
-            List.Cells(SmVal, 3).Value = Me.ListBox1.List(rVal, 5)
-            SmVal = SmVal + 1
-        ElseIf SmVal < 92 Then 'Second Row
-            List.Cells(3, 5).Value = "Small"
-            List.Cells(3, 6).Value = "Part"
-            List.Cells(3, 7).Value = "Date"
-            List.Cells(SmVal - 44, 5).Value = Me.ListBox1.List(rVal, 0)
-            List.Cells(SmVal - 44, 6).Value = Me.ListBox1.List(rVal, 1)
-            List.Cells(SmVal - 44, 7).Value = Me.ListBox1.List(rVal, 5)
-            SmVal = SmVal + 1
-        Else 'Second Page first row
-            List.Cells(48, 1).Value = "Small"
-            List.Cells(48, 2).Value = "Part"
-            List.Cells(48, 3).Value = "Date"
-            List.Cells(SmVal - 43, 1).Value = Me.ListBox1.List(rVal, 0)
-            List.Cells(SmVal - 43, 2).Value = Me.ListBox1.List(rVal, 1)
-            List.Cells(SmVal - 43, 3).Value = Me.ListBox1.List(rVal, 5)
-            SmVal = SmVal + 1
-        End If
-    Else
-        List.Cells(LgVal, 9).Value = Me.ListBox1.List(rVal, 0)
-        List.Cells(LgVal, 10).Value = Me.ListBox1.List(rVal, 1)
-        List.Cells(LgVal, 11).Value = Me.ListBox1.List(rVal, 5)
-        LgVal = LgVal + 1
+    'Declarations
+    Dim listSheet As Worksheet
+    Dim rowIndex As Integer
+    Dim smallCounter As Integer
+    Dim largeCounter As Integer
+    
+    'Initializations
+    Set listSheet = Worksheets("List")
+    rowIndex = 1
+    smallCounter = 4
+    largeCounter = 4
+    
+    'Save workbook
+    ThisWorkbook.Save
+    
+    'No bin selected; Print message and exit sub
+    If Me.ListBox2.List(0, 0) = "NS" Then
+        MsgBox "No Bin is selected for printing"
+        Exit Sub
     End If
 
-    rVal = rVal + 1
-Loop
+    'Clears the worksheet before adding new items
+    listSheet.Cells.ClearContents
 
-err:
+    '------------------------------------------------------
+    'Setup listSheet Sheet with default Headings and Values
+    '------------------------------------------------------
+    
+    'Set Heading Values
+    listSheet.Cells(1, 5).Value = "Bin: " & Me.ListBox2.List(0, 0)
+    listSheet.Cells(3, 1).Value = "Small"
+    listSheet.Cells(3, 2).Value = "Part"
+    listSheet.Cells(3, 3).Value = "Date"
+    listSheet.Cells(3, 9).Value = "Large"
+    listSheet.Cells(3, 10).Value = "Part"
+    listSheet.Cells(3, 11).Value = "Date"
+
+    
+
+    '***Bypass error caused by Do While loop when the list is exceeded***
+    On Error GoTo errorBypass
+    
+    'Step through ListBox1 items and add to List worksheet
+    Do While Me.ListBox1.List(rowIndex, 0) <> ""
+        
+        'Smalls (2 column groups on first page and one group on the second page)
+        If Me.ListBox1.List(rowIndex, 2) = "Small" Then
+            If smallCounter < 47 Then 'First Column
+                listSheet.Cells(smallCounter, 1).Value = Me.ListBox1.List(rowIndex, 0)
+                listSheet.Cells(smallCounter, 2).Value = Me.ListBox1.List(rowIndex, 1)
+                listSheet.Cells(smallCounter, 3).Value = Me.ListBox1.List(rowIndex, 5)
+                smallCounter = smallCounter + 1
+            ElseIf smallCounter < 90 Then 'Second Column
+                listSheet.Cells(3, 5).Value = "Small"
+                listSheet.Cells(3, 6).Value = "Part"
+                listSheet.Cells(3, 7).Value = "Date"
+                listSheet.Cells(smallCounter - 43, 5).Value = Me.ListBox1.List(rowIndex, 0)
+                listSheet.Cells(smallCounter - 43, 6).Value = Me.ListBox1.List(rowIndex, 1)
+                listSheet.Cells(smallCounter - 43, 7).Value = Me.ListBox1.List(rowIndex, 5)
+                smallCounter = smallCounter + 1
+            Else 'Second Page first Column
+                listSheet.Cells(47, 1).Value = "Small"
+                listSheet.Cells(47, 2).Value = "Part"
+                listSheet.Cells(47, 3).Value = "Date"
+                listSheet.Cells(smallCounter - 42, 1).Value = Me.ListBox1.List(rowIndex, 0)
+                listSheet.Cells(smallCounter - 42, 2).Value = Me.ListBox1.List(rowIndex, 1)
+                listSheet.Cells(smallCounter - 42, 3).Value = Me.ListBox1.List(rowIndex, 5)
+                smallCounter = smallCounter + 1
+            End If
+        Else 'Larges (One column group on the first page)
+            listSheet.Cells(largeCounter, 9).Value = Me.ListBox1.List(rowIndex, 0)
+            listSheet.Cells(largeCounter, 10).Value = Me.ListBox1.List(rowIndex, 1)
+            listSheet.Cells(largeCounter, 11).Value = Me.ListBox1.List(rowIndex, 5)
+            largeCounter = largeCounter + 1
+        End If
+        
+        'Incriment to next row on ListBox1
+        rowIndex = rowIndex + 1
+    Loop
+
+errorBypass:
     Resume a
 a:
     
-List.Cells(1, 1).Value = "Small Count:"
-List.Cells(1, 2).Value = SmVal - 4
-List.Cells(1, 9).Value = "Large Count:"
-List.Cells(1, 10).Value = LgVal - 4
+    'Final counts for Small and Large
+    listSheet.Cells(1, 1).Value = "Small Count:"
+    listSheet.Cells(1, 2).Value = smallCounter - 4
+    listSheet.Cells(1, 9).Value = "Large Count:"
+    listSheet.Cells(1, 10).Value = largeCounter - 4
 
-
-'***Turn on when complete***
-'***Print List***
-Worksheets("List").PrintOut Copies:=1, Collate:=True, _
+    'Print List
+    listSheet.PrintOut Copies:=1, Collate:=True, _
         IgnorePrintAreas:=False '***Works!!!***
         
-Bend:
 
 End Sub
 
 Private Sub CommandButton14_Click()
-'**************
-'Tissue Discard
-'**************
+'=========================
+'Continue from Selected Pt
+'=========================
     
-    Dim Bins As Worksheet
-    Set Bins = Worksheets("Bins")
-    Dim rVal As Integer
-    rVal = 2
-    Dim Counter As Integer
-    Counter = 0
-    Dim Starter As Integer
-    Dim Ender As Integer
-    Dim Mystring As String
+    Dim binsSheet As Worksheet
+    Set binsSheet = Worksheets("Bins")
+    Dim selectedItem As Long
+    Dim listedRow As Integer
+    Dim myString As String
     
+    'Bin is open
     If Me.ListBox2.List(0, 0) <> "NS" Then
+        
+        'Check if Tracking Station is open
+        On Error GoTo errorBypass
+        AppActivate "Tracking Station"
+        Application.Wait Now() + TimeValue("00:00:01")
+        
+        'Tracking Station is open, proceed to next section
+        GoTo skipError
+errorBypass:
+        MsgBox "Please make sure 'Tissue Discard' is open"
+        Exit Sub
+        
+skipError:
     
-        
-        '***Turn On***
-        'AppActivate "Tracking Station" '***Good!***
-        'Application.Wait Now + #12:00:01 AM#
-        
-        '***Delete when ready***
-        ''SendKeys "spec"
-        ''SendKeys "{enter}"
-        ''Application.Wait Now + #12:00:02 AM#
-        ''SendKeys "tissue discard"
-        ''Application.Wait Now + #12:00:02 AM#
-        ''SendKeys "{enter}"
-        ''Application.Wait Now + #12:00:02 AM#
-        
-        
-        
-    Dim selItm As Long
-    'Dim selItmAcc As Long
-    'Dim selBin As String
-    'Dim Bins As Worksheet
-    'Set Bins = Worksheets("Bins")
-    'Dim rVal As Integer
+        'Reset normal error function
+        On Error GoTo 0
     
-    For selItm = LBound(Me.ListBox1.List) To UBound(Me.ListBox1.List)
-    'MsgBox Me.ListBox1.List(selItm, 4) '***Starts counting at 0****
-    'MsgBox UBound(Me.ListBox1.List) '***Works***
-        If Me.ListBox1.Selected(selItm) = True Then '****it is selected***
+        'Start process from selected specimen in list
+        For selectedItem = LBound(Me.ListBox1.List) To UBound(Me.ListBox1.List)
+            If Me.ListBox1.Selected(selectedItem) = True Then '****it is selected***
             
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            'Counter = Counter + 1
-            
-            'selBin = Me.ListBox1.List(selItm, 0) '***Sets the New Bin number***
-            
-            'For selItmAcc = LBound(Frame1.ListBox1.List) To UBound(Frame1.ListBox1.List) '***Reference specimen selected on Frame1***
-                'If Frame1.ListBox1.Selected(selItmAcc) = True Then
+                'Loop from selected specimen to upper boundary
+                Do While selectedItem <= UBound(Me.ListBox1.List)
+                    listedRow = Me.ListBox1.List(selectedItem, 4)
+                    myString = binsSheet.Cells(listedRow, 2).Value '***Outputs the specimen's scan code (not truncated)***
+                    Application.Wait Now() + TimeValue("00:00:01")
+                    SendStringToCoPath myString
+                    Call EnterButton
                 
-                '***************************************************
-                
-                'MsgBox selItm 'Properly lists row for selected item in UserForm2 ListBox1
-                'MsgBox selItmAcc 'Properly lists row for selected item in Frame1 ListBox1
-                'MsgBox Frame1.ListBox1.List(selItmAcc, 4) 'Properly lists row of spec
-                
-                'rVal = Frame1.ListBox1.List(selItmAcc, 4) '*********THIS!!!!!!***************
-                    
-                        '***Change bin to selected bin***
-                        'Bins.Cells(rVal, 1).Value = selBin
-                        '***Change date to current date***
-                       'Bins.Cells(rVal, 7).Value = Date
-                       
-                '******************************************************
-                'End If
-            'Next selItmAcc
-            GoTo a
+                    'Incriment to next item in list
+                    selectedItem = selectedItem + 1
+                Loop
             
-        End If
-        Counter = Counter + 1
+                'Places excel back in focus
+                AppActivate Application.Caption
+                Call DeleteSection
+                Exit Sub
+            End If
+        Next selectedItem
+        GoTo none
         
-    Next selItm
-    GoTo none
-        
-        
-a:
-        'Do While Bins.Cells(rVal, 1).Value <> ""
-            'If Bins.Cells(rVal, 1).Value = Me.ListBox2.List(0, 0) Then
-                'Counter = Counter + 1
-            
-                
-                ''***Turn on after testing***
-                'Mystring = Bins.Cells(rVal, 2).Value
-                'Application.Wait Now + #12:00:01 AM#
-                'SendKeys Mystring
-                'SendKeys "{enter}"
-                
-                ''***Turn off afteer testing***
-                ''AppActivate "excel"
-                ''MsgBox Mystring
-                ''Application.Wait Now + #12:00:01 AM#
-                
-            
-                'If Counter = 1 Then
-                    'Starter = rVal
-                    'Ender = rVal
-                'Else
-                    'Ender = rVal
-                'End If
-            'End If
-            'rVal = rVal + 1
-        'Loop
-    
-    'AppActivate "excel"
-    
-        'If Counter > 0 Then
-            'Dim iRemove As VbMsgBoxResult
-            'iRemove = MsgBox("Do you want to remove this bin from service and delete all specimen from this list?", vbQuestion + vbYesNo, "Delete Specimen List?")
-            'If iRemove = vbYes Then
-                
-                ''***Turn on after testing**
-                'Rows(Starter & ":" & Ender).Delete Shift:=xlUp
-                ''Bins.Rows(Starter & ":" & Ender).Select
-                
-                'Me.EnterBox1.Value = ""
-                'Me.ListBox3.Clear
-                'Call Update
-                'Call UserForm_Initialize
-                
-            'End If
-        'End If
-    'Else
-none:
-        'MsgBox "Please SELECT a specimen bin to resume Tissue Discard"
+    Else
+
+        MsgBox "Please OPEN a specimen bin to resume Tissue Discard"
+        Exit Sub
     End If
-'none:
-    'MsgBox "Please select the next specimen to add to Specimen Discard"
+
+none:
+    'No specimen is currently selected
+    Application.Wait Now() + TimeValue("00:00:02")
+    AppActivate Application.Caption
+    MsgBox "Please select the next specimen to add to Specimen Discard"
     
-z:
+
 End Sub
 
-
-
-Private Sub CommandButton15_Click()
-
-
-
-'AppActivate "notepad"
-'SendKeys "This is a test"
-''vbKeyReturn
-'KeyAscii = 15  'Does not throw error, but did not work
-'SendKeys "This is only a test"
-
-
-
-
-
-
-
-
-
-
-'******************Example Code**********************************************
-
-'Option Explicit
-'Private Declare PtrSafe Sub keybd_event Lib "user32" (ByVal bVk As Byte, ByVal bScan As Byte, ByVal dwFlags As Long, ByVal dwExtraInfo As Long)
-'Private Declare PtrSafe Function MapVirtualKey Lib "user32" Alias "MapVirtualKeyA" (ByVal wCode As Long, ByVal wMapType As Long) As Long
-'Private Const VK_RETURN = &HD
-'Private Const KEYEVENTF_KEYUP = &H2
-
-'AppActivate "copath"
-        'Application.Wait Now + #12:00:01 AM#
-        'SendKeys "spec"
-        'SendKeys "{enter}"
-        'Application.Wait Now + #12:00:02 AM#
-        'SendKeys "tissue discard"
-        'Application.Wait Now + #12:00:02 AM#
-        'SendKeys "{enter}"
-        'Application.Wait Now + #12:00:02 AM#
-
-'Sub pleasework5()
+Private Sub CommandButton16_Click()
+'======
+'Delete
+'======
     
-    Dim keys As String
-    Dim wsh As Object
-    Dim mvk As Double
-       
-    Set wsh = CreateObject("WScript.Shell")
-    mvk = MapVirtualKey(VK_RETURN, 0)
-    'AppActivate "notepad"
-    AppActivate "copath"
+    'Declarations
+    Dim iRemove As VbMsgBoxResult
+    Dim selectedItem As Long
+    Dim selCol As Integer
+    Dim selRow As Integer
+    Dim listedRow As Integer
     
-    Application.Wait Now() + TimeValue("00:00:01")
-    'wsh.SendKeys ("2207062") 'Sends value
-    '***CoPath is not cool with any of this***
-    'wsh.SendKeys ("spec")
-    'wsh.SendKeys ("s")
-    'wsh.SendKeys ("p")
-    'wsh.SendKeys ("e")
-    'wsh.SendKeys ("c")
-    'SendKeys "spec"
+    'Initializations
+    iRemove = MsgBox("Do you want to remove this/theese specimen permanently?", vbQuestion + vbYesNo, _
+                     "Delete Specimen List?")
     
-    '*****Now Acting as Return Button*****
-    Application.Wait Now() + TimeValue("00:00:01")
-    keybd_event VK_RETURN, mvk, 0, 0
-    keybd_event VK_RETURN, 0, 0, 0
-    keybd_event VK_RETURN, 0, KEYEVENTF_KEYUP, 0
-    Application.Wait Now() + TimeValue("00:00:01")
+    If iRemove = vbYes Then
+        
+        'Check if user is in an active bin
+        If Me.ListBox2.List(0, 0) <> "NS" Then
+            
+            'Set upper and lower bounds of list
+            For selectedItem = LBound(Me.ListBox1.List) To UBound(Me.ListBox1.List)
+                If Me.ListBox1.Selected(selectedItem) = True Then '****it is selected***
+                    listedRow = Me.ListBox1.List(selectedItem, 4)
+                    Rows(listedRow & ":" & listedRow).Delete Shift:=xlUp
+                    Call Update 'keep from deleting multiple rows - Rework when time permits
+                End If
+            Next selectedItem
+        Else
+            MsgBox "Please scan or select and open a Bin to use this feature"
+        End If
+    Else
+        'User does not want to delete
+        MsgBox "Fine! I'll leave it alone then."
+    End If
     
-    'wsh.SendKeys ("1")
-    wsh.SendKeys ("tissue discard")
+    Call Update
+    Call Organize
     
-    Application.Wait Now() + TimeValue("00:00:01")
-    keybd_event VK_RETURN, mvk, 0, 0
-    keybd_event VK_RETURN, 0, 0, 0
-    keybd_event VK_RETURN, mvk, KEYEVENTF_KEYUP, 0
-    Application.Wait Now() + TimeValue("00:00:01")
-    
-    wsh.SendKeys ("ROSS23-39250;P1;KAI")
-    
-    Application.Wait Now() + TimeValue("00:00:02")
-    keybd_event VK_RETURN, mvk, 0, 0
-    keybd_event VK_RETURN, 0, 0, 0
-    keybd_event VK_RETURN, mvk, KEYEVENTF_KEYUP, 0
-    Application.Wait Now() + TimeValue("00:00:02")
-    
-    Set wsh = Nothing
+End Sub
 
+Private Sub CommandButton17_Click()
+'=========
+'Empty Bin
+'=========
+    
+    Call DeleteSection
+    
+End Sub
 
-
+Private Sub CommandButton18_Click()
+'=====================
+'Refresh Specimen List
+'=====================
+    
+    Call Update
+    Call Organize
+    
 End Sub
 
 Private Sub CommandButton2_Click()
-
-'**************
+'==============
 'Tissue Discard
-'**************
+'==============
     
-    Dim Bins As Worksheet
-    Set Bins = Worksheets("Bins")
-    Dim rVal As Integer
-    rVal = 2
-    Dim Counter As Integer
-    Counter = 0
-    Dim Starter As Integer
-    Dim Ender As Integer
-    Dim Mystring As String
+    Dim binsSheet As Worksheet
+    Set binsSheet = ThisWorkbook.Worksheets("Bins")
+    Dim listedRow As Integer
+    Dim selectedItem As Long
+    Dim myString As String
     
+    'Check if user is in an active bin
     If Me.ListBox2.List(0, 0) <> "NS" Then
-    
+        
         AppActivate "copath"
-        Application.Wait Now + #12:00:01 AM#
-        SendKeys "spec"
-        SendKeys "{enter}"
-        Application.Wait Now + #12:00:02 AM#
-        SendKeys "tissue discard"
-        Application.Wait Now + #12:00:02 AM#
-        SendKeys "{enter}"
-        Application.Wait Now + #12:00:02 AM#
-    
-        Do While Bins.Cells(rVal, 1).Value <> ""
-            If Bins.Cells(rVal, 1).Value = Me.ListBox2.List(0, 0) Then
-                Counter = Counter + 1
-            
-                
-                '***Turn on after testing***
-                Mystring = Bins.Cells(rVal, 2).Value
-                Application.Wait Now + #12:00:01 AM#
-                SendKeys Mystring
-                'Application.Wait Now + #12:00:01 AM#
-                SendKeys "{enter}"
-                
-                '***Turn off afteer testing***
-                'AppActivate "excel"
-                'MsgBox Mystring
-                'Application.Wait Now + #12:00:01 AM#
-                
-            
-                If Counter = 1 Then
-                    Starter = rVal
-                    Ender = rVal
-                Else
-                    Ender = rVal
-                End If
-            End If
-            rVal = rVal + 1
-        Loop
-    
-    AppActivate "excel"
-    
-        If Counter > 0 Then
-            Dim iRemove As VbMsgBoxResult
-            iRemove = MsgBox("Do you want to remove this bin from service and delete all specimen from this list?", vbQuestion + vbYesNo, "Delete Specimen List?")
-            If iRemove = vbYes Then
-                
-                '***Turn on after testing**
-                Rows(Starter & ":" & Ender).Delete Shift:=xlUp
-                'Bins.Rows(Starter & ":" & Ender).Select
-                
-                Me.EnterBox1.Value = ""
-                Me.ListBox3.Clear
-                Call Update
-                Call UserForm_Initialize
-                
-            End If
-        End If
+        Application.Wait Now() + TimeValue("00:00:01")
+        SendStringToCoPath "spec" 'sets selection to specimen tracking
+        Call EnterButton
+        Application.Wait Now() + TimeValue("00:00:02")
+        SendStringToCoPath "t" 'sets drop down to tissue discard
+        Application.Wait Now() + TimeValue("00:00:02")
+        Call EnterButton
+        Application.Wait Now() + TimeValue("00:00:02")
+        
+        'Locate each item from list in binsSheet and input scan code into CoPath
+        For selectedItem = 1 To UBound(Me.ListBox1.List)
+            listedRow = Me.ListBox1.List(selectedItem, 4)
+            myString = binsSheet.Cells(listedRow, 2).Value '***Outputs the specimen's scan code***
+            Application.Wait Now + #12:00:01 AM#
+            SendStringToCoPath myString
+            Call EnterButton
+        Next selectedItem
+        
+        AppActivate "discard tissue"
+        
+        Call DeleteSection
+        
     Else
         MsgBox "Please scan or enter a specimen bin to begin Tissue Discard"
     End If
-'z:
     
 End Sub
 
 Private Sub CommandButton4_Click()
-'********
+'========
 'Open Bin
-'********
+'========
 
-   Dim selItm As Long
+   Dim selectedItem As Long
     
-    For selItm = LBound(Me.ListBox1.List) To UBound(Me.ListBox1.List)
-        If Me.ListBox1.Selected(selItm) = True Then '****it is selected***
+    For selectedItem = LBound(Me.ListBox1.List) To UBound(Me.ListBox1.List)
+        If Me.ListBox1.Selected(selectedItem) = True Then '****it is selected***
             Me.ListBox2.Clear
-            Me.ListBox2.AddItem Me.ListBox1.List(selItm, 0)
+            Me.ListBox2.AddItem Me.ListBox1.List(selectedItem, 0)
             
             '***Updates ListBox3***
             With Me.ListBox3
                 .Clear
                 .AddItem "Start Bin"
-                .List(0, 1) = Me.ListBox1.List(selItm, 0)
+                .List(0, 1) = Me.ListBox1.List(selectedItem, 0)
             End With
             Me.ListBox4.Clear
-            
-            
+                        
         End If
         
-    Next selItm
-    
+    Next selectedItem
         
-    
-    
     Call Update
+    Call Organize
     Frame1.EnterBox1.SetFocus
 End Sub
 
 Private Sub CommandButton5_Click()
-'***********
+'===========
 'Move to Bin
-'***********
+'===========
     
+    'Declarations
+    Dim selectedItem As Long
+    Dim selCol As Integer
+    Dim selRow As Integer
     
-    '******************************
-    'See if you can add multiselect
-    '******************************
-    
+    'Check if user is in active bin
     If Me.ListBox2.List(0, 0) <> "NS" Then
         
-        Dim selItm As Long
-        Dim selCol As Integer
-        Dim selRow As Integer
-        'Dim sh As Worksheet
-        'Set sh = ActiveSheet
-    
-        '***Must first be in active bin***
-        '"Please Open or Scan an active bin and select a valid Specimen"
-    
-        For selItm = LBound(Me.ListBox1.List) To UBound(Me.ListBox1.List)
-            If Me.ListBox1.Selected(selItm) = True Then '****it is selected***
+        For selectedItem = LBound(Me.ListBox1.List) To UBound(Me.ListBox1.List)
+            If Me.ListBox1.Selected(selectedItem) = True Then '****it is selected***
                 UserForm2.Show
-                'selCol = Me.ListBox1.List(selItm, 2)
-                'selRow = Me.ListBox1.List(selItm, 3)
-                'sh.Cells(selRow, selCol).Delete Shift:=xlUp
-            
-                'If Cells(2, selCol).Value = 0 Then
-                    'Columns(selCol).Delete Shift:=xlToLeft
-                'End If
-            'Else: MsgBox "No item is selected"
-            Call Update
-            GoTo z
+                Call Update
+                Exit Sub
             End If
-        Next selItm
-        'Call Update
+        Next selectedItem
     Else
         MsgBox "Please scan or select and open a Bin to use this feature"
     End If
-    'Call UserForm_Initialize
-z:
-    
 End Sub
 
 Private Sub CommandButton9_Click()
-'****
+'====
 'Exit
-'****
+'====
+    
+    'Declarations
+    Dim iExit As VbMsgBoxResult
+    
+    'Initializations
+    iExit = MsgBox("Do you want to exit?", vbQuestion + vbYesNo, "Exit Search")
 
-Dim iExit As VbMsgBoxResult
-
-iExit = MsgBox("Do you want to exit?", vbQuestion + vbYesNo, "Exit Search")
-
-If iExit = vbYes Then
-    Unload Me
-    ActiveWorkbook.Save
-    Application.Quit
-End If
-
-End Sub
-
-Private Sub CQY_Click()
+    If iExit = vbYes Then
+        Unload Me
+        ThisWorkbook.Save
+        Application.Quit
+    End If
 
 End Sub
 
 Private Sub EnterBox1_exit(ByVal Cancel As MSForms.ReturnBoolean)
-'*********
+'=========
 'Entry Box
-'*********
-
-    '***Swap Container and count
-    '***Needs to organize - Working well - verify
+'=========
     
-        
-    '***Check everything for Ucase - Should be good
-    '***Validate that all col + 1 are good and don't need to be changed to col + 2 - I think this is complete, but will need to continue to check
-    '***Clean up colums so that only desired info is displayed*** - Do this when you have added all function; you might need column and row data for "Discard Tissue"
-    '***Add function - "Discard Tissue"***
-        '***Deleting list clears bin and saves receipt file (log) showing when specimen were removed form the workbook***
-        
-
-
-    Dim Entry As String
-    Dim ConT As String
-    Dim tDate As Date
-    Entry = UCase(EnterBox1.Value)
-    Dim col As Integer
-    Dim rVal As Integer
-    Dim bar As Worksheet
-    Dim Bins As Worksheet
-    Dim catch As Integer
-    catch = 0
-    Set bar = Worksheets("Barcode")
-    Set Bins = Worksheets("Bins")
-    Dim Pnt1 As Integer
-    Dim Pnt2 As Integer
+    'Declarations
+    Dim userEntry As String
+    Dim containerType As String
+    Dim rowIndex As Integer
+    Dim barCodeSheet As Worksheet
+    Dim binsSheet As Worksheet
+    Dim foundItem As Boolean
+    Dim truncationPoint1 As Integer 'Truncation point 1 for scan value (full specimen number)
+    Dim truncationPoint2 As Integer 'Truncation point 2 for scan value (full specimen number)
+    Dim partNumber As Variant
+    Dim moveSpecimen As VbMsgBoxResult
+    
+    'Initializations
+    userEntry = UCase(Trim(EnterBox1.Value)) 'Trim added for Error management
+    foundItem = False
+    Set barCodeSheet = Worksheets("Barcode")
+    Set binsSheet = ThisWorkbook.Worksheets("Bins")
+    partNumber = Array("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", _
+               "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z")
+               
+    'Set behavior
     EnterBox1.EnterKeyBehavior = False
     EnterBox1.TabKeyBehavior = False
     
-    Dim PN As Variant
-    PN = Array("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z")
+    '=========================================================================================================
     
-    '1
-    If Entry <> "" Then
+    'Checks for userEntry discrepency where multiple entries made at once
+    If userEntry Like "*;*;*;*" Then
+        MsgBox ("Multiple case userEntry. Please try again")
+        'Place cursor back in entry box
+        Frame1.EnterBox1.SetFocus
+        GoTo z
+    End If
     
-        '**************************
-        'Add bin number to ListBox2 - Done!
-        '**************************
+    '---------------------------------------------------------------------------------------------------------
+    
+    'Check for void entry
+    If userEntry <> "" Then
+    
+        '==========================
+        'Add bin number to ListBox2
+        '==========================
         
-        rVal = 1
+        rowIndex = 1
         
-        Do While bar.Cells(rVal, 2).Value <> ""
+        'Incriment through barCodeSheet and check values vs userEntry
+        Do While barCodeSheet.Cells(rowIndex, 2).Value <> ""
             
-            '*********************
-            'Locate active Bin Row - Done!
-            '*********************
-            
-            '2
-            If bar.Cells(rVal, 2).Value = Entry Then
+            'Sets the Bin Identifier Box (ListBox2) to the userEntry if a match is found
+            If barCodeSheet.Cells(rowIndex, 2).Value = userEntry Then
+                
+                '***Updates ListBox2***
+                Me.ListBox2.Clear
+                With Me.ListBox2
+                    .AddItem barCodeSheet.Cells(rowIndex, 1)
+                    Call Update
+                    'GoTo z
+                End With
                 
                 '***Updates ListBox3***
                 With Me.ListBox3
                     .Clear
                     .AddItem "Start Bin"
-                    .List(ListBox3.ListCount - 1, 1) = bar.Cells(rVal, 1)
+                    .List(ListBox3.ListCount - 1, 1) = barCodeSheet.Cells(rowIndex, 1)
                 End With
+                
+                '***Updates ListBox4***
                 With Me.ListBox4
                     .Clear
-                    .AddItem "Start Bin"
-                    .List(0, 1) = bar.Cells(rVal, 1)
+                    '.AddItem "Start Bin"
+                    '.List(0, 1) = barCodeSheet.Cells(rowIndex, 1)
                 End With
-                                
-                Me.ListBox2.Clear
-                With Me.ListBox2
-                    .AddItem bar.Cells(rVal, 1)
-                    GoTo a
-                End With
-            '2
+                foundItem = True
+                GoTo z
             End If
                 
-            rVal = rVal + 1
+            rowIndex = rowIndex + 1
         Loop
         
-        '***Yow are here because the search did not result in an active Bin Barcode***
+        '---------------------------------------------------------------------------------------------------------
+        
+        '***********************************************************************
+        'You are here because the search did not result in an active Bin Barcode
+        '***********************************************************************
     
-        '*****************************************
-        'Search for specimen number and report Bin - Done!
-        '*****************************************
-        '2
-        If bar.Cells(rVal, 2).Value = "" And Me.ListBox2.List(0, 0) = "NS" Then
+        '=======================================================
+        'Search for specimen number and report Bin - No Bin Open
+        '=======================================================
+        
+        'Value not found in barCode and no open Bin
+        If foundItem = False And Me.ListBox2.List(0, 0) = "NS" Then
+            rowIndex = 2
             
-            'col = 2
-            rVal = 2
+            'Sets Header for ListBox1
+            Me.ListBox1.Clear
+            Me.ListBox1.AddItem "Acession Number"
+            Me.ListBox1.List(ListBox1.ListCount - 1, 1) = "Part"
+            Me.ListBox1.List(ListBox1.ListCount - 1, 2) = "Bin"
+            Me.ListBox1.List(ListBox1.ListCount - 1, 3) = "Container"
             
-            Do While Bins.Cells(rVal, 2).Value <> ""
-                '3
-                If InStr(1, Bins.Cells(rVal, 2).Value, Entry) <> 0 Then '***Serches string for entry***
-                    '***Allows script to skip clearing the list box in the loop - Entries are added after one another***
-                    '4
-                    If catch = 1 Then
-                        GoTo cb
-                    '4
-                    End If
-                         
-                    '***Sets Header for ListBox1***
-                    Me.ListBox1.Clear
-                    Me.ListBox1.AddItem "Acession Number"
-                    Me.ListBox1.List(ListBox1.ListCount - 1, 1) = "Part"
-                    Me.ListBox1.List(ListBox1.ListCount - 1, 2) = "Bin"
-                    Me.ListBox1.List(ListBox1.ListCount - 1, 3) = "Container"
-cb:
-                    '***Marks points in the Accession number to separate case from part***
-                    Pnt1 = InStr(1, Bins.Cells(rVal, 2), ";")
-                    Pnt2 = InStr(Pnt1 + 1, Bins.Cells(rVal, 2), ";")
-                    '***Adds each partial match to the running list***
+            'Incriment through binSheets to find matching values
+            Do While binsSheet.Cells(rowIndex, 2).Value <> ""
+                
+                'Search string for userEntry
+                If InStr(1, binsSheet.Cells(rowIndex, 2).Value, userEntry) <> 0 Then
+                    
+                    'Marks points in the Accession number to separate case from part
+                    truncationPoint1 = InStr(1, binsSheet.Cells(rowIndex, 2), ";")
+                    truncationPoint2 = InStr(truncationPoint1 + 1, binsSheet.Cells(rowIndex, 2), ";")
+                    
+                    'Adds each partial match to the running list
                     With Me.ListBox1
-                        .AddItem Left(Bins.Cells(rVal, 2), Pnt1 - 1)
-                        '.List(ListBox1.ListCount - 1, 1) = Mid(Bins.Cells(rVal, 2), Pnt1 + 1, Pnt2 - Pnt1 - 1)
-                        .List(ListBox1.ListCount - 1, 1) = Bins.Cells(rVal, 5)
-                        .List(ListBox1.ListCount - 1, 2) = Bins.Cells(rVal, 1)
-                        .List(ListBox1.ListCount - 1, 3) = Bins.Cells(rVal, 6)
+                        .AddItem Left(binsSheet.Cells(rowIndex, 2), truncationPoint1 - 1)
+                        .List(ListBox1.ListCount - 1, 1) = binsSheet.Cells(rowIndex, 5)
+                        .List(ListBox1.ListCount - 1, 2) = binsSheet.Cells(rowIndex, 1)
+                        .List(ListBox1.ListCount - 1, 3) = binsSheet.Cells(rowIndex, 6)
                     End With
-                    '***Sets catch value to 1 so workbook progresses to end of Sub upon completing loop***
-                    catch = 1
-                '3
+                    foundItem = True
                 End If
-                rVal = rVal + 1
+                
+                rowIndex = rowIndex + 1
             Loop
-            '3
-            If catch = 1 Then
-                GoTo z
-            '3
-            End If
             
-            '********************************
             'Message Prompt if Item not found - Done!
-            '********************************
-            '3
-            If Bins.Cells(rVal, 2).Value = "" Then
+            If foundItem = False Then
                 MsgBox "Item not found. Please scan a SPECIMEN BIN or enter valid SPECIMEN NUMBER"
-                GoTo z
-            '3
             End If
         
-        '*****************************************************
-        'Add Specimen to Bins Sheet when Bin has been selected - Done!
-        '*****************************************************
-        '2
-        ElseIf bar.Cells(rVal, 2).Value = "" And Me.ListBox2.List(0, 0) <> "NS" Then 'Double check that this is needed still?
+        '=========================================================================================================
+        
+        '=====================================================
+        'Add Specimen to Bins Sheet when Bin has been selected
+        '=====================================================
+        
+        'Item not previously found and currently in active Bin
+        ElseIf foundItem = False And Me.ListBox2.List(0, 0) <> "NS" Then
             
+            rowIndex = 2
+            
+            'Small or Large specimen container selection
             If Small = True Then
-                ConT = "Small"
+                containerType = "Small"
             ElseIf Large = True Then
-                ConT = "Large"
+                containerType = "Large"
             Else
                 MsgBox "Please select Small or Large"
+                'foundItem = False
                 GoTo z
             End If
             
             '3
-            If InStr(1, Entry, ";") = 0 Then
-                GoTo ms1
+            If InStr(1, userEntry, ";") = 0 Then
+                MsgBox "Please scan a valid specimen"
+                'foundItem = False
+                GoTo z
             '3
             End If
             
-            '*******************
-            'Check for Duplicate - Done!
-            '*******************
+            '---------------------------------------------------------------------------------------------------------
             
-            rVal = 2
+            '===================
+            'Check for Duplicate
+            '===================
             
-            Do While Bins.Cells(rVal, 2).Value <> ""
-                '3
-                If Entry = Bins.Cells(rVal, 2).Value Then
-    '********
-    'Here!!!!
-    '********
-                    Dim DelMove As VbMsgBoxResult
-
-                    DelMove = MsgBox("This specimen has already been added to BIN " & Bins.Cells(rVal, 1) & ". Do you want to remove this specimen and add it to the current bin", vbQuestion + vbYesNo, "Exit Search")
-
-                    If DelMove = vbYes Then
+            'Incriment through binsSheet for previously scanned value
+            Do While binsSheet.Cells(rowIndex, 2).Value <> ""
+                
+                'userEntry is equal a previously scanned value
+                If userEntry = binsSheet.Cells(rowIndex, 2).Value Then
+                
+                    'Prompt to move specimen
+                    moveSpecimen = MsgBox("This specimen has already been added to BIN " _
+                                           & binsSheet.Cells(rowIndex, 1) & _
+                                           ". Do you want to remove this specimen and add it to the current bin", _
+                                           vbQuestion + vbYesNo, "Exit Search")
+                    
+                    'Yes option selected
+                    If moveSpecimen = vbYes Then
                         
-                        '***Change bin to selected bin***
-                        Bins.Cells(rVal, 1).Value = Me.ListBox2.List(0, 0)
-                        '***Change date to current date***
-                        Bins.Cells(rVal, 7).Value = Date
+                        'Change bin to current bin
+                        binsSheet.Cells(rowIndex, 1).Value = Me.ListBox2.List(0, 0)
                         
+                        'Change date to current date
+                        binsSheet.Cells(rowIndex, 7).Value = Date
+                        
+                        'Change container type
                         If Small = True Then
-                            ConT = "Small"
+                            containerType = "Small"
                         ElseIf Large = True Then
-                            ConT = "Large"
+                            containerType = "Large"
                         End If
                         
-                        Bins.Cells(rVal, 6).Value = ConT
+                        'Set container type in binsSheet
+                        binsSheet.Cells(rowIndex, 6).Value = containerType
                         
-                        Pnt1 = InStr(1, Bins.Cells(rVal, 2), ";")
+                        'Truncate userEntry for display
+                        truncationPoint1 = InStr(1, binsSheet.Cells(rowIndex, 2), ";")
                         
+                        'Add item to ListBox3 for reference
                         With Me.ListBox3
-                            .AddItem Left(Bins.Cells(rVal, 2), Pnt1 - 1), 0
-                            .List(0, 1) = PN(Bins.Cells(rVal, 5) - 1)
+                            .AddItem Left(binsSheet.Cells(rowIndex, 2), truncationPoint1 - 1), 0
+                            .List(0, 1) = partNumber(binsSheet.Cells(rowIndex, 5) - 1)
                             .List(0, 2) = ListBox3.ListCount - 1
                         End With
                         ListBox3.TopIndex = 0
                         
+                        'Add item to ListBox3 for recently scanned value
                         With Me.ListBox4
                             .Clear
-                            .AddItem Left(Bins.Cells(rVal, 2), Pnt1 - 1), 0
-                            .List(0, 1) = PN(Bins.Cells(rVal, 5) - 1)
-                            '.List(0, 2) = ListBox3.ListCount - 1
+                            .AddItem Left(binsSheet.Cells(rowIndex, 2), truncationPoint1 - 1), 0
+                            .List(0, 1) = partNumber(binsSheet.Cells(rowIndex, 5) - 1)
                         End With
-                        
-                        'Call Update
                     
                     End If
                     
                     GoTo z
                 Else
-                    rVal = rVal + 1
-                '3
+                    rowIndex = rowIndex + 1
                 End If
             Loop
-            '***If you are here you have an rVal for the first empty row***
             
-            '******************************************
-            'Add specimen entry to the end of Bins list - Done!
-            '******************************************
+            '---------------------------------------------------------------------------------------------------------
             
-            rVal = Bins.Cells(Rows.count, 1).End(xlUp).Row + 1
+            '==========================================
+            'Add specimen entry to the end of Bins list
+            '==========================================
             
-            Bins.Cells(rVal, 1).Value = Me.ListBox2.List(0, 0) '***Bin***
-            Bins.Cells(rVal, 2).Value = Entry '***SN***
-            Bins.Cells(rVal, 3).Value = Mid(Entry, 5, 2) '***Year***
+            'Count rows and find first empty space in binsSheet
+            rowIndex = binsSheet.Cells(Rows.count, 1).End(xlUp).Row + 1
+            
+            binsSheet.Cells(rowIndex, 1).Value = Me.ListBox2.List(0, 0) '***Bin***
+            binsSheet.Cells(rowIndex, 2).Value = userEntry '***Serial Number***
+            binsSheet.Cells(rowIndex, 3).Value = Mid(userEntry, 5, 2) '***Year***
                     
-            Pnt1 = InStr(1, Entry, "-")
-            Pnt2 = InStr(1, Entry, ";")
+            truncationPoint1 = InStr(1, userEntry, "-")
+            truncationPoint2 = InStr(1, userEntry, ";")
                     
-            Bins.Cells(rVal, 4).Value = Mid(Entry, Pnt1 + 1, Pnt2 - Pnt1 - 1) '***Case***
+            binsSheet.Cells(rowIndex, 4).Value = Mid(userEntry, truncationPoint1 + 1, _
+                                                 truncationPoint2 - truncationPoint1 - 1) '***Case***
                     
-            Pnt1 = InStr(1, Entry, ";")
-            Pnt2 = InStr(Pnt1 + 1, Entry, ";")
+            truncationPoint1 = InStr(1, userEntry, ";")
+            truncationPoint2 = InStr(truncationPoint1 + 1, userEntry, ";")
                     
-            Bins.Cells(rVal, 5).Value = Mid(Entry, Pnt1 + 2, Pnt2 - Pnt1 - 2) '***Part***
+            binsSheet.Cells(rowIndex, 5).Value = Mid(userEntry, truncationPoint1 + 2, _
+                                                 truncationPoint2 - truncationPoint1 - 2) '***Part***
             
-            Bins.Cells(rVal, 6).Value = ConT '***Container***
-            Bins.Cells(rVal, 7).Value = Date '***Date***
+            binsSheet.Cells(rowIndex, 6).Value = containerType '***Container***
+            binsSheet.Cells(rowIndex, 7).Value = Date '***Date***
             
+            '---------------------------------------------------------------------------------------------------------
             
-            
-            
-            '******************
+            '==================
             'Add to Recent Scan
-            '******************
-                        
+            '==================
+            
+            'Add userEntry to recent scan list
             With Me.ListBox3
-                .AddItem Left(Bins.Cells(rVal, 2), Pnt1 - 1), 0
-                .List(0, 1) = PN(Bins.Cells(rVal, 5) - 1)
+                .AddItem Left(binsSheet.Cells(rowIndex, 2), truncationPoint1 - 1), 0
+                .List(0, 1) = partNumber(binsSheet.Cells(rowIndex, 5) - 1)
                 .List(0, 2) = ListBox3.ListCount - 1
             End With
             ListBox3.TopIndex = 0
             
+            'Add userEntry to most recently scanned box
             With Me.ListBox4
                 .Clear
-                .AddItem Left(Bins.Cells(rVal, 2), Pnt1 - 1), 0
-                .List(0, 1) = PN(Bins.Cells(rVal, 5) - 1)
-                '.List(0, 2) = ListBox3.ListCount - 1
+                .AddItem Left(binsSheet.Cells(rowIndex, 2), truncationPoint1 - 1), 0
+                .List(0, 1) = partNumber(binsSheet.Cells(rowIndex, 5) - 1)
             End With
             
-        '2
         End If
-a:
-        '***************************
-        'Update ListBox1 after Entry
-        '***************************
-    
-        'Call Update - Taking a lot of time as dataset grows
         
-        GoTo z
-        
-ms1:
-    MsgBox "Please scan a valid specimen"
+        '---------------------------------------------------------------------------------------------------------
+        '=========================================================================================================
 
 z:
         
         EnterBox1.Value = ""
         Cancel = True
-    '1
+    
+    'Allow user to exit EntryBox 1 if no entry
     Else
         
         Cancel = False
-    '1
     End If
+    
+    '***This behavior might be redundant but needs testing***
+    EnterBox1.EnterKeyBehavior = False
+    EnterBox1.TabKeyBehavior = False
             
 End Sub
 
-
-
 Private Sub Large_Click()
+'==========================
+'Selection button for Large
+'==========================
     Frame1.EnterBox1.SetFocus
 End Sub
 
@@ -866,255 +902,237 @@ Private Sub ListBox1_Click()
 End Sub
 
 Private Sub ListBox2_Click()
-
+'==================
+'Current Bin number
+'==================
+    Frame1.EnterBox1.SetFocus
 End Sub
 
 Private Sub ListBox3_Click()
+'=================
+'Current scan list
+'=================
     Frame1.EnterBox1.SetFocus
 End Sub
 
 Private Sub ListBox4_Click()
+'================
+'Most recent scan
+'================
     Frame1.EnterBox1.SetFocus
 End Sub
 
 Private Sub Small_Click()
+'==========================
+'Selection button for Small
+'==========================
     Frame1.EnterBox1.SetFocus
 End Sub
 
 Private Sub UserForm_Initialize()
-'***************
-'Initialize Form - Done!
-'***************
+'===============
+'Initialize Form
+'===============
     
-    Dim rVal As Integer
-    Dim cntr As Integer
-    Dim Bins As Worksheet
-    Set Bins = Worksheets("Bins")
-
-
+    'Declarations
+    Dim specimenRange As Integer
+    Dim n As Integer
+    Dim specimenCounter As Integer
+    Dim binsSheet As Worksheet
+    
+    'Initializations
+    Set binsSheet = ThisWorkbook.Worksheets("Bins")
+    specimenRange = binsSheet.Cells(Rows.count, 1).End(xlUp).Row
+    
+    'Clear ListBox1 and add headers
     Me.ListBox1.Clear
     Me.ListBox1.AddItem "Active Bins"
     Me.ListBox1.List(ListBox1.ListCount - 1, 1) = "Count"
     
+    'Clear ListBox2 and add NS (None Selected)
     Me.ListBox2.Clear
     Me.ListBox2.AddItem "NS"
     
-    For rVal = 2 To Bins.Cells(Rows.count, 1).End(xlUp).Row
-        cntr = 1
-        Do While Bins.Cells(rVal, 1).Value = Bins.Cells(rVal + 1, 1)
-            cntr = cntr + 1
-            rVal = rVal + 1
-        Loop
-        With Me.ListBox1
-            .AddItem Bins.Cells(rVal, 1)
-            .List(ListBox1.ListCount - 1, 1) = cntr
-        End With
-    Next rVal
+    '---------------------------------------------------------------------------------------------------------
     
+    'Loop through binsSheet and search for matching specimen
+    For rowIndex = 2 To specimenRange
+        specimenCounter = 0
+        n = 1
+        
+        'Loop through previous bin numbers and find unique bins
+        Do While rowIndex - n > 1
+            
+            'Bin matches previous bin number
+            If binsSheet.Cells(rowIndex, 1).Value = binsSheet.Cells(rowIndex - n, 1) Then
+                'Move up list until a unique bin number has been found
+                GoTo z
+            End If
+            
+            'Incriment until start of list is reached
+            n = n + 1
+        Loop
+        
+        '---------------------------------------------------------------------------------------------------------
+        
+        'Reset n to scan down list for specimen with matching Bin
+        n = 0
+        
+        'Counts number of specimen in same bin
+        Do While rowIndex + n <= specimenRange
+            
+            'Check for Bins matching current unique bin down the list and incriment counter
+            If binsSheet.Cells(rowIndex, 1).Value = binsSheet.Cells(rowIndex + n, 1) Then
+                specimenCounter = specimenCounter + 1
+            End If
+            
+            'Incriment until end of list is reached
+            n = n + 1
+        Loop
+        
+        'Add unique bin number and count to the list
+        With Me.ListBox1
+            .AddItem binsSheet.Cells(rowIndex, 1)
+            .List(ListBox1.ListCount - 1, 1) = specimenCounter
+        End With
+z:
+    Next rowIndex
+    
+    'Set behaviors
     Frame1.EnterBox1.SetFocus
+    EnterBox1.EnterKeyBehavior = False
+    EnterBox1.TabKeyBehavior = False
+    Cancel = True
     
 End Sub
 
-Sub Update()
+Sub DeleteSection()
+'=================================
+'Delete specimen from specimen bin
+'=================================
     
-    '*********************************
-    'Updates ListBox1 after data entry - Done
-    '*********************************
+    'Declarations
+    Dim binsSheet As Worksheet
+    Dim rowIndex As Integer
+    Dim myString As String
+    Dim myPath As String
+    Dim thisBin As String
+    Dim myDay, myMonth, myYear
+    Dim iRemove As VbMsgBoxResult
+    
+    'Initializations
+    Set binsSheet = ThisWorkbook.Worksheets("Bins")
+    thisBin = Me.ListBox2.List(0, 0)
+    myPath = Application.ThisWorkbook.Path & "\Discarded"
+    myDay = Day(Date)
+    myMonth = Month(Date)
+    myYear = Year(Date)
+    
+    iRemove = MsgBox("Do you want to remove this bin from service and delete all specimen from this list?", _
+                     vbQuestion + vbYesNo, "Delete Specimen List?")
+    
+    If iRemove = vbYes Then
+        ThisWorkbook.SaveCopyAs Filename:=myPath & "\Discard Tissue " & _
+                                            thisBin & " " & myYear & myMonth & myDay & ".xlsm"
         
-    Dim Bins As Worksheet
-    Dim Pnt1 As Integer
-    Dim Pnt2 As Integer
-    Dim cntr As Integer
-    Dim rVal As Integer
+        For rowIndex = binsSheet.Cells(Rows.count, 1).End(xlUp).Row To 2 Step -1
+            If binsSheet.Cells(rowIndex, 1).Value = thisBin Then
+                Rows(rowIndex & ":" & rowIndex).Delete Shift:=xlUp
+            End If
+        Next rowIndex
+        
+        Call UserForm_Initialize
+            
+    End If
+z:
+
+End Sub
+
+Sub Update()
+'=================================
+'Updates ListBox1 after data entry
+'=================================
+    
+    'Declarations
+    Dim binsSheet As Worksheet
+    Dim truncationPoint1 As Integer
+    Dim truncationPoint2 As Integer
+    Dim specimenCounter As Integer
+    Dim rowIndex As Integer
     Dim Starter As Integer
     Dim Ender As Integer
-    Dim curBin As String
-    Set Bins = Worksheets("Bins")
-    curBin = Me.ListBox2.List(0, 0)
-    
-    Dim PN As Variant
-    PN = Array("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z")
+    Dim currentBin As String
+    Dim partNumber As Variant
     
     
-    rVal = Bins.Cells(Rows.count, 1).End(xlUp).Row
+    Set binsSheet = ThisWorkbook.Worksheets("Bins")
+    currentBin = Me.ListBox2.List(0, 0)
+    partNumber = Array("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", _
+                       "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z")
     
-    '***********
-    'Sort by Bin - Done!
-    '***********
-    
-    Bins.Sort.SortFields.Clear
-    Bins.Sort.SortFields.Add Key:=Range("A2:A" & rVal), _
-        SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
-    With Bins.Sort
-        .SetRange Range("A2:G" & rVal)
-        .header = xlNo
-        .MatchCase = False
-        .Orientation = xlTopToBottom
-        .SortMethod = xlPinYin
-        .Apply
-    End With
-    
-    '*******************
-    'Sort by year in Bin
-    '*******************
-    
-    For rVal = 2 To Bins.Cells(Rows.count, 1).End(xlUp).Row
-        Starter = rVal
-        
-        Do While Bins.Cells(Starter, 1) = Bins.Cells(rVal, 1)
-            rVal = rVal + 1
-        Loop
-        
-        '***Checks specimen year against different Bin***
-        Do While Bins.Cells(Starter, 1) <> Bins.Cells(rVal - 1, 1)
-            rVal = rVal - 1
-        Loop
-        
-        '***********************
-        If Starter <> rVal Then
-            rVal = rVal - 1
-        End If
-        '***********************
-    
-        Ender = rVal
-        
-        Bins.Sort.SortFields.Clear
-        Bins.Sort.SortFields.Add Key:=Range("C" & Starter & ":C" & Ender), _
-            SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
-        With Bins.Sort
-            .SetRange Range("A" & Starter & ":G" & Ender)
-            .header = xlNo
-            .MatchCase = False
-            .Orientation = xlTopToBottom
-            .SortMethod = xlPinYin
-            .Apply
-        End With
-    Next rVal
-    
-    '*******************
-    'Sort by case in year
-    '*******************
-    
-    For rVal = 2 To Bins.Cells(Rows.count, 1).End(xlUp).Row
-        Starter = rVal
-        Do While Bins.Cells(Starter, 3) = Bins.Cells(rVal, 3)
-            rVal = rVal + 1
-            
-        Loop
-        
-        '***Checks case against different Bin***
-        Do While Bins.Cells(Starter, 1) <> Bins.Cells(rVal - 1, 1)
-            rVal = rVal - 1
-        Loop
-        
-        '***Checks case against different year***
-        Do While Bins.Cells(Starter, 3) <> Bins.Cells(rVal - 1, 3)
-            rVal = rVal - 1
-        Loop
-        
-        '***********************
-        If Starter <> rVal Then
-            rVal = rVal - 1
-        End If
-        '***********************
-        
-        Ender = rVal
-                        
-        Bins.Sort.SortFields.Clear
-        Bins.Sort.SortFields.Add Key:=Range("D" & Starter & ":D" & Ender), _
-            SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
-        With Bins.Sort
-            .SetRange Range("A" & Starter & ":G" & Ender)
-            .header = xlNo
-            .MatchCase = False
-            .Orientation = xlTopToBottom
-            .SortMethod = xlPinYin
-            .Apply
-        End With
-    Next rVal
-    
-    '*******************
-    'Sort by part in case
-    '*******************
-    
-    For rVal = 2 To Bins.Cells(Rows.count, 1).End(xlUp).Row
-        
-        Starter = rVal
-        Do While Bins.Cells(Starter, 4) = Bins.Cells(rVal, 4)
-            rVal = rVal + 1
-        Loop
-        
-        '***Checks part against different Bin***
-        Do While Bins.Cells(Starter, 1) <> Bins.Cells(rVal - 1, 1)
-            rVal = rVal - 1
-        Loop
-        
-        '***Checks part against different year***
-        Do While Bins.Cells(Starter, 3) <> Bins.Cells(rVal - 1, 3)
-            rVal = rVal - 1
-        Loop
-        
-        '***Checks part against different case***
-        Do While Bins.Cells(Starter, 4) <> Bins.Cells(rVal - 1, 4)
-            rVal = rVal - 1
-        Loop
-        
-        '***********************
-        If Starter <> rVal Then
-            rVal = rVal - 1
-        End If
-        '***********************
-        
-        Ender = rVal
-        
-        Bins.Sort.SortFields.Clear
-        Bins.Sort.SortFields.Add Key:=Range("E" & Starter & ":E" & Ender), _
-            SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
-        With Bins.Sort
-            .SetRange Range("A" & Starter & ":G" & Ender)
-            .header = xlNo
-            .MatchCase = False
-            .Orientation = xlTopToBottom
-            .SortMethod = xlPinYin
-            .Apply
-        End With
-    Next rVal
-        
-    '*****
-    '*****
-    '*****
-    '*****
-    '*****
-    
-    rVal = 2
-    
+    'Clear ListBox1
     Me.ListBox1.Clear
     
+    'Add header to ListBox1
     Me.ListBox1.AddItem "Accession Number"
     Me.ListBox1.List(ListBox1.ListCount - 1, 1) = "Part"
     Me.ListBox1.List(ListBox1.ListCount - 1, 2) = "Container"
     Me.ListBox1.List(ListBox1.ListCount - 1, 3) = "Count"
     Me.ListBox1.List(ListBox1.ListCount - 1, 4) = "Row"
     Me.ListBox1.List(ListBox1.ListCount - 1, 5) = "Date"
+    Me.ListBox1.List(ListBox1.ListCount - 1, 6) = "Year"
+    Me.ListBox1.List(ListBox1.ListCount - 1, 7) = "Specimen"
     
-    cntr = 1
+    specimenCounter = 1
         
-    For rVal = 2 To Bins.Cells(Rows.count, 1).End(xlUp).Row
+    For rowIndex = 2 To binsSheet.Cells(Rows.count, 1).End(xlUp).Row
     
-        If Bins.Cells(rVal, 1).Value = curBin Then
+        If binsSheet.Cells(rowIndex, 1).Value = currentBin Then
             
-            Pnt1 = InStr(1, Bins.Cells(rVal, 2), ";")
-            Pnt2 = InStr(Pnt1 + 1, Bins.Cells(rVal, 2), ";")
+            truncationPoint1 = InStr(1, binsSheet.Cells(rowIndex, 2), ";")
+            truncationPoint2 = InStr(truncationPoint1 + 1, binsSheet.Cells(rowIndex, 2), ";")
         
             With Me.ListBox1
-                .AddItem Left(Bins.Cells(rVal, 2), Pnt1 - 1)
-                .List(ListBox1.ListCount - 1, 1) = PN(Bins.Cells(rVal, 5) - 1)
-                .List(ListBox1.ListCount - 1, 2) = Bins.Cells(rVal, 6)
-                .List(ListBox1.ListCount - 1, 3) = cntr
-                .List(ListBox1.ListCount - 1, 4) = rVal
-                .List(ListBox1.ListCount - 1, 5) = Bins.Cells(rVal, 7)
+                .AddItem Left(binsSheet.Cells(rowIndex, 2), truncationPoint1 - 1)
+                .List(ListBox1.ListCount - 1, 1) = partNumber(binsSheet.Cells(rowIndex, 5) - 1)
+                .List(ListBox1.ListCount - 1, 2) = binsSheet.Cells(rowIndex, 6)
+                .List(ListBox1.ListCount - 1, 3) = specimenCounter
+                .List(ListBox1.ListCount - 1, 4) = rowIndex
+                .List(ListBox1.ListCount - 1, 5) = binsSheet.Cells(rowIndex, 7)
+                .List(ListBox1.ListCount - 1, 6) = binsSheet.Cells(rowIndex, 3)
+                .List(ListBox1.ListCount - 1, 7) = binsSheet.Cells(rowIndex, 4)
             End With
-            cntr = cntr + 1
+            specimenCounter = specimenCounter + 1
         End If
-    Next rVal
+    Next rowIndex
+    
+End Sub
+
+Sub Organize()
+'=================
+'Organize Listbox1
+'=================
+
+    Dim i As Long
+    Dim j As Long
+    Dim Temp As Variant
+    Dim Y  As Integer
+    With ListBox1
+        For i = 1 To .ListCount - 1
+            For j = i + 1 To .ListCount - 1
+                If CLng(.List(i, 7)) >= CLng(.List(j, 7)) Then 'Evaluates as a number
+                    For Y = 0 To .ColumnCount - 1
+                        If Y = 3 Then
+                            Y = 4 'Do not want to reorder count column
+                        End If
+                        Temp = .List(j, Y) '***Works when columns have strings***
+                        .List(j, Y) = .List(i, Y)
+                        .List(i, Y) = Temp
+                    Next Y
+                End If
+            Next j
+        Next i
+    End With
+
+
 End Sub
