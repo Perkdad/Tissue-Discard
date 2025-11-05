@@ -1,10 +1,10 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} UserForm1 
    Caption         =   "Bin Editor"
-   ClientHeight    =   3165
+   ClientHeight    =   3150
    ClientLeft      =   45
-   ClientTop       =   390
-   ClientWidth     =   4905
+   ClientTop       =   405
+   ClientWidth     =   4920
    OleObjectBlob   =   "UserForm1.frx":0000
    StartUpPosition =   1  'CenterOwner
 End
@@ -13,177 +13,239 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+'**********************************
+'Program:   Discard Tissue Workbook
+'Form:      UserForm1 Bin Editor
+'Author:    Aaron Perkins
+'Date:      10/28/2025
+'Version:   1.4.2
+'**********************************
+
 Private Sub CommandButton1_Click()
-        
-    Dim bar As Worksheet
-    Dim Bins As Worksheet
-    Set bar = Worksheets("Barcode")
-    Set Bins = Worksheets("Bins")
-    Dim cBin As String
-    Dim cBar As String
-    cBin = UCase(TextBox1.Value)
-    cBar = UCase(TextBox2.Value)
-    Dim rVal As Integer
-    Dim answer As Integer
+'======
+'Update
+'======
     
-    '**********************************
-    'Checks for a bin number in textbox - Done!
-    '**********************************
+    'Declarations
+    Dim barCodeSheet As Worksheet
+    Dim binsSheet As Worksheet
+    Dim userEntryBin As String
+    Dim userBarCode As String
+    Dim rowIndex As Integer
+    Dim updateMessage As Integer
     
-    If cBin = "" Then
+    'Initialization
+    Set barCodeSheet = ThisWorkbook.Worksheets("Barcode")
+    Set binsSheet = ThisWorkbook.Worksheets("Bins")
+    
+    userEntryBin = UCase(TextBox1.Value)
+    userBarCode = UCase(TextBox2.Value)
+    
+    '=========================================================================================================
+    
+    '=================================
+    'Check for a bin number in textbox
+    '=================================
+    
+    If userEntryBin = "" Then
         MsgBox "Please Enter a Bin Number to proceed"
         TextBox2.Value = ""
-        GoTo z
+        Call UserForm_Initialize
+        Exit Sub
     End If
     
-    '****************************
-    'Check for a valid Bin Number - Done!
-    '****************************
+    '============================
+    'Check for a valid Bin Number
+    '============================
     
-    If Not UCase(cBin) Like "[A-Z]##" Then
+    If Not UCase(userEntryBin) Like "[A-Z]##" Then
         MsgBox "You must enter a Bin number consisting of a Letter and 2 numerical Digits"
         TextBox1.Value = ""
         TextBox2.Value = ""
-        GoTo z
+        Call UserForm_Initialize
+        Exit Sub
     End If
     
-    '************************************************
-    'Checks to see if the Bin is active with specimen - Done!
-    '************************************************
+    '===============================================
+    'Check to see if the Bin is active with specimen
+    '===============================================
     
-    rVal = 1
-    Do While Bins.Cells(rVal, 1) <> ""
-        If UCase(Bins.Cells(rVal, 1).Value) = UCase(cBin) Then
-            GoTo m1
-        End If
-        rVal = rVal + 1
-    Loop
+    rowIndex = 1
     
-    '***************************************
-    'Checks if the barcode is already in use - Done!
-    '***************************************
-        
-    rVal = 1
-    Do While bar.Cells(rVal, 2) <> ""
-        If UCase(bar.Cells(rVal, 2).Value) = UCase(cBar) Then
-            GoTo m2 '***assigned to another bin***
-        End If
-        rVal = rVal + 1
-    Loop
-    
-    rVal = 1
-    
-    Do While Bins.Cells(rVal, 2) <> ""
-        If UCase(Bins.Cells(rVal, 2).Value) = UCase(cBar) Then
-            GoTo m4
-        End If
-        rVal = rVal + 1
-    Loop
-    
-    '********************************
-    'If bin and bar have been entered - Done!
-    '********************************
-           
-    If cBin <> "" And cBar <> "" Then
-        
-        '************************
-        'Checks for valid barcode - Done!
-        '************************
-        
-        If InStr(cBar, ";") = 0 Then 'double check this works
-            GoTo m3
-        End If
-        
-        'ROSS23-15305;P1;KAI
-        
-        '*************************************************
-        'Checks if the Bin is currently assigned a barcode - Done!
-        '*************************************************
-        
-        rVal = 2
-        Do While bar.Cells(rVal, 1) <> ""
-            If UCase(bar.Cells(rVal, 1).Value) = UCase(cBin) Then
-                answer = MsgBox("This Bin currently has a Barcode. Would you like to update the Barcode?", vbYesNo)
-                If answer = vbNo Then
-                    TextBox1.Value = ""
-                    TextBox2.Value = ""
-                    GoTo z
-                Else
-                    GoTo a
-                End If
-            End If
-            rVal = rVal + 1
-        Loop
-        
-a:
-        
-        '******************************************************************
-        'Searches for bin in list else appends bin to list and adds barcode - Done!
-        '******************************************************************
-        
-        If bar.Cells(rVal, 1) <> "" Then
-            bar.Cells(rVal, 2).Value = UCase(cBar)
-        Else
-            bar.Cells(rVal, 2).Value = UCase(cBar)
-            bar.Cells(rVal, 1).Value = UCase(cBin)
-        End If
+    'Loop through rows until empty row found
+    Do While binsSheet.Cells(rowIndex, 1) <> ""
+        If UCase(binsSheet.Cells(rowIndex, 1).Value) = UCase(userEntryBin) Then
+            MsgBox "This Bin is active and may not be edited at this time"
             TextBox1.Value = ""
             TextBox2.Value = ""
-        GoTo z
-        
-    End If
-        
-    '***********************
-    'Remove bin from service - Done!
-    '***********************
+            Call UserForm_Initialize
+            Exit Sub
+        End If
+        rowIndex = rowIndex + 1
+    Loop
     
-    If cBin <> "" And cBar = "" Then
+    '---------------------------------------------------------------------------------------------------------
     
-        rVal = 2
-        Do While bar.Cells(rVal, 1) <> ""
-            If bar.Cells(rVal, 1) = UCase(cBin) Then
-                answer = MsgBox("Are you sure you would like to remove this Bin from service and dissociate the Barcode?", vbYesNo)
-                If answer = vbYes Then
-                    bar.Range("A" & rVal & ":B" & rVal).Delete Shift:=xlUp
+    '=======================================
+    'Checks if the barcode is already in use
+    '=======================================
+    
+    '--------------------------------
+    'The barcode is assigned to a bin
+    '--------------------------------
+    
+    rowIndex = 1
+    
+    'Loop through rows until empty row found
+    Do While barCodeSheet.Cells(rowIndex, 2) <> ""
+        If UCase(barCodeSheet.Cells(rowIndex, 2).Value) = UCase(userBarCode) Then
+            MsgBox "This Barcode is already assigned to another bin"
+            TextBox2.Value = ""
+            Call UserForm_Initialize
+            Exit Sub
+        End If
+        rowIndex = rowIndex + 1
+    Loop
+    
+    '--------------------------------------------
+    'The barcode is currently a specimen in a bin
+    '--------------------------------------------
+    
+    rowIndex = 1
+    
+    'Loop through rows until empty row found
+    Do While binsSheet.Cells(rowIndex, 2) <> ""
+        
+        'The barcode matches a value in the binsSheet
+        If UCase(binsSheet.Cells(rowIndex, 2).Value) = UCase(userBarCode) Then
+            MsgBox "This is an active Barcode for a specimen in Bin " & binsSheet.Cells(rowIndex, 1)
+            TextBox1.Value = ""
+            TextBox2.Value = ""
+            Call UserForm_Initialize
+            Exit Sub
+        End If
+        rowIndex = rowIndex + 1
+    Loop
+    
+    '---------------------------------------------------------------------------------------------------------
+    
+    '=====================
+    'Bin and Barcode entry
+    '=====================
+    
+    'Bin and barcode values entered
+    If userEntryBin <> "" And userBarCode <> "" Then
+        
+        '-----------------------
+        'Check for valid barcode
+        '-----------------------
+        
+        'Search for ";" in Ross barcode to validate
+        If InStr(userBarCode, ";") = 0 Then
+            MsgBox "Please enter a valid barcode"
+            TextBox2.Value = ""
+            Call UserForm_Initialize
+            Exit Sub
+        End If
+        
+        
+        '------------------------------------------------
+        'Check if the Bin is currently assigned a barcode
+        '------------------------------------------------
+        
+        rowIndex = 2
+        
+        'Loop through rows until empty row found
+        Do While barCodeSheet.Cells(rowIndex, 1) <> ""
+            
+            'User entry matches a value in the barCodeSheet
+            If UCase(barCodeSheet.Cells(rowIndex, 1).Value) = UCase(userEntryBin) Then
+                
+                'Message prompt to update Barcode
+                updateMessage = MsgBox("This Bin currently has a Barcode. Would you like to update the Barcode?", vbYesNo)
+                
+                'No response does not update and exits sub
+                If updateMessage = vbNo Then
                     TextBox1.Value = ""
                     TextBox2.Value = ""
-                    GoTo z
+                    Call UserForm_Initialize
+                    Exit Sub
+                Else
+                    GoTo loopExit
                 End If
-                GoTo z
+            End If
+            rowIndex = rowIndex + 1
+        Loop
+        
+loopExit:
+        
+        '---------------------------------------------------------------
+        'Update bin barcode if in list or append bin and barcode to list
+        '---------------------------------------------------------------
+        
+        'update
+        If barCodeSheet.Cells(rowIndex, 1) <> "" Then
+            barCodeSheet.Cells(rowIndex, 2).Value = UCase(userBarCode)
+        
+        'append
+        Else
+            barCodeSheet.Cells(rowIndex, 2).Value = UCase(userBarCode)
+            barCodeSheet.Cells(rowIndex, 1).Value = UCase(userEntryBin)
+        End If
+        
+        'Reset text boxes
+        TextBox1.Value = ""
+        TextBox2.Value = ""
+        Call UserForm_Initialize
+        Exit Sub
+        
+    End If
+    
+    '---------------------------------------------------------------------------------------------------------
+        
+    '=======================
+    'Remove bin from service
+    '=======================
+    
+    'Bin number entered with no barcode
+    If userEntryBin <> "" And userBarCode = "" Then
+        
+        rowIndex = 2
+        
+        'Loop through rows until empty row found
+        Do While barCodeSheet.Cells(rowIndex, 1) <> ""
+            
+            'Bin entry matches bin in barCodeSheet
+            If barCodeSheet.Cells(rowIndex, 1) = UCase(userEntryBin) Then
+                
+                'Message prompt to remove bin from service
+                updateMessage = MsgBox("Are you sure you would like to remove this Bin from service and dissociate the Barcode?", vbYesNo)
+                
+                'Yes response deletes bin and details out of the barCodeSheet
+                If updateMessage = vbYes Then
+                    barCodeSheet.Range("A" & rowIndex & ":B" & rowIndex).Delete Shift:=xlUp
+                    TextBox1.Value = ""
+                    TextBox2.Value = ""
+                    Call UserForm_Initialize
+                    Exit Sub
+                End If
+                
+                'No response exits sub
+                Call UserForm_Initialize
+                Exit Sub
             End If
             
-            rVal = rVal + 1
+            rowIndex = rowIndex + 1
             
         Loop
         
+        'Unrecognized Bin entry
         MsgBox "You have not entered an active Bin number"
         TextBox1.Value = ""
         TextBox2.Value = ""
+        Call UserForm_Initialize
     End If
     
-m1:
-    MsgBox "This Bin is active and may not be edited at this time"
-    TextBox1.Value = ""
-    TextBox2.Value = ""
-    GoTo z
-m2:
-    MsgBox "This Barcode is already assigned to another bin"
-    TextBox2.Value = ""
-    GoTo z
-m3:
-    MsgBox "Please enter a valid barcode"
-    TextBox2.Value = ""
-    GoTo z
-m4:
-    MsgBox "This is an active Barcode for a specimen in Bin " & Bins.Cells(rVal, 1)
-    TextBox1.Value = ""
-    TextBox2.Value = ""
-    GoTo z
-    
-z:
-
-Call UserForm_Initialize
-
 End Sub
 
 
@@ -195,26 +257,38 @@ Private Sub TextBox1_Change()
 
 End Sub
 
+Private Sub TextBox2_Change()
+
+End Sub
+
 Private Sub UserForm_Initialize()
+
+'===================
+'Initialize UserForm
+'===================
     
-    'Application.Visible = False
-    'Organize bin numbers
+    'Declarations
+    Dim barCodeSheet As Worksheet
+    Dim binsSheet As Worksheet
+    Dim rowIndex As Integer
+    Dim rowCount As Integer
     
+    'Initializations
+    Set barCodeSheet = ThisWorkbook.Worksheets("Barcode")
+    Set binsSheet = ThisWorkbook.Worksheets("Bins")
+    rowIndex = barCodeSheet.Cells(Rows.count, 1).End(xlUp).Row
+    
+    '=========================================================================================================
+    
+    'Set focus on TextBox1 (Bin Number)
     UserForm1.TextBox1.SetFocus
     
-    Dim bar As Worksheet
-    Dim Bins As Worksheet
-    Set bar = Worksheets("Barcode")
-    Set Bins = Worksheets("Bins")
-    Dim rVal As Integer
-    Dim roCnt As Integer
-    rVal = bar.Cells(Rows.count, 1).End(xlUp).Row
-    
-    bar.Sort.SortFields.Clear
-    bar.Sort.SortFields.Add Key:=Range("B1"), _
+    'Sort barCodesheet
+    barCodeSheet.Sort.SortFields.Clear
+    barCodeSheet.Sort.SortFields.Add Key:=Range("B1"), _
         SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
-    With bar.Sort
-        .SetRange Range("A1:B" & rVal)
+    With barCodeSheet.Sort
+        .SetRange Range("A1:B" & rowIndex)
         .header = xlYes
         .MatchCase = False
         .Orientation = xlTopToBottom
@@ -222,17 +296,19 @@ Private Sub UserForm_Initialize()
         .Apply
     End With
     
+    'Clear ListBox1 of any previous data
     Me.ListBox1.Clear
     
+    'Add headers to ListBox1
     Me.ListBox1.AddItem "Bin"
     Me.ListBox1.List(ListBox1.ListCount - 1, 1) = "Barcode"
     
-    For roCnt = 2 To rVal
-    
+    'Add items to ListBox1
+    For rowCount = 2 To rowIndex
         With Me.ListBox1
-            .AddItem bar.Cells(roCnt, 1)
-            .List(ListBox1.ListCount - 1, 1) = bar.Cells(roCnt, 2)
+            .AddItem barCodeSheet.Cells(rowCount, 1)
+            .List(ListBox1.ListCount - 1, 1) = barCodeSheet.Cells(rowCount, 2)
             
         End With
-    Next roCnt
+    Next rowCount
 End Sub
